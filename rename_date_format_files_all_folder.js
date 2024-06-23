@@ -173,7 +173,6 @@ const main = async ({ tp, app }, clientConfig) => {
         override: false
     };
 
-
     //if strategy params are string find in strategies map
     if (typeof clientConfig.matchStrategy === 'string') {
         clientConfig.matchStrategy = strategies.match[clientConfig.matchStrategy];
@@ -188,7 +187,19 @@ const main = async ({ tp, app }, clientConfig) => {
         throwError("Client config not defined.");
     }
 
-    return processAllFiles({ tp, app }, config);
+    const result = await processAllFiles({ tp, app }, config);
+    const msg = `
+params: 
+    input: ${config.inputFolder}
+    output: ${config.outputFolder}
+    matchStrategy: ${config.matchStrategy}
+    transformStrategy: ${config.transformStrategy}
+    override: ${config.override}
+-----------------------------
+results:
+    ${result}
+    `;
+    return `\`\`\`\n${msg}\n\`\`\``;
 };
 /**
  USAGE: strategies can be a fixed strategy or a dynamic function
