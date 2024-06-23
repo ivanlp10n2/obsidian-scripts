@@ -8,10 +8,13 @@ const throwError = (message) => {
 }
 
 const buildNewTp = async (file, tp) => {
+    const printDetails = (tfile) => {
+        console.log(`tfile name: ${tfile.name}`)
+        console.log(`tfile path: ${tfile.path}`)
+    }
     const tfile = await tp.file.find_tfile(file.path)
     const result = { ...tp, file: tfile }
-    console.log(`tfile name: ${result.file.name}`)
-    console.log(`tfile path: ${result.file.path}`)
+    printDetails(tfile)
     return result
 }
 const buildDependencies = (templateApi) => {
@@ -48,8 +51,11 @@ const buildNewPathfile = (day, month, year) => {
         }
         return mapOfMonths[month]
     }
+    const ensureTwoDigits = (day) => {
+        return day.length == 1 ? `0${day}` : day
+    }
     const monthNumber = monthToNumberStr(month)
-    const fullDay = `${year}-${monthNumber}-${day}`
+    const fullDay = `${year}-${monthNumber}-${ensureTwoDigits(day)}`
     const fullPath = `${year}/${monthNumber}/${fullDay}/${fullDay}`
     return fullPath
 }
@@ -63,7 +69,9 @@ const buildFlowBranches = (dependencies) => {
             return `${rootFolderPath}${dependencies.newDateFormat(day, month, year)}`
         },
         isCorrectToBeFormat: (day, month, year) => {
-            const isDay = isANumber(day) && day.length == 2
+            const isDayOneDigit = day.length == 1
+            const isDayTwoDigit = day.length == 2
+            const isDay = isANumber(day) && (isDayOneDigit || isDayTwoDigit)
             const isMonth = !isANumber(month) && month.length == 3
             const isYear = isANumber(year) && year.length == 4
             console.log(`isDay: ${day}-${isDay}, isMonth: ${month}-${isMonth}, isYear: ${year}-${isYear}`)
@@ -89,9 +97,9 @@ const printDependencies = (dependencies) => {
     console.log(`dependencies loaded:\n${JSON.stringify(dependencies)}`)
 }
 
-async function rename_format_daily_file(tp, dailyFolder, moveFn) {
+async function rename_format_daily_file(tp, outputFolder, moveFn) {
     if (tp == undefined) throwError("templater dependency is not provided as argument")
-    if (dailyFolder == undefined) throwError("dailyFolder is not provided as argument")
+    if (outputFolder == undefined) throwError("outputFolder is not provided as argument")
     const dependencies = buildDependencies(tp)
     printDependencies(dependencies)
     const branchs = buildFlowBranches(dependencies)
@@ -100,10 +108,12 @@ async function rename_format_daily_file(tp, dailyFolder, moveFn) {
 
         const [day, month, year] = filename.split('-')
 
+        if (day == undefined || month == undefined || year == undefined)
+            return branchs.throwErrorWrongFormat(filename)
         if (branchs.isAlreadyFormatted(year, month, day))
             return branchs.throwErrorAlreadyFormatted(filename)
         if (branchs.isCorrectToBeFormat(day, month, year)) {
-            const newName = await branchs.createNewFormattedFile(day, month, year, dailyFolder)
+            const newName = await branchs.createNewFormattedFile(day, month, year, outputFolder)
             return moveFn(newName)
         } else
             return branchs.throwErrorWrongFormat(filename)
@@ -115,17 +125,18 @@ async function rename_format_daily_file(tp, dailyFolder, moveFn) {
         return (e)
     }
 }
-async function rename_format_daily_file_all_folder({ tp, app }, dailyFolder) {
+async function rename_format_daily_file_all_folder({ tp, app }, {inputFolder, outputFolder} ) {
+    console.log(`inputFolder: ${inputFolder}, outputFolder: ${outputFolder}`)
     let wrongFormat = []
     let alreadyFormatted = []
     let updated = []
-    const files = getFolderMarkdown(tp, app)
+    const files = getFolderMarkdown(app, inputFolder)
     for (const file of files) {
         const wrongFormatMsg = () => `- [[${file.name}]]: wrong format`
         const alreadyFormattedMsg = () => `- [[${file.name}]]: already formatted`
         const successMsg = () => `- [[${file.name}]]: success`
         const updatedTp = await buildNewTp(file, tp)
-        const result = await rename_format_daily_file(updatedTp, dailyFolder, (newName) => {
+        const result = await rename_format_daily_file(updatedTp, outputFolder, (newName) => {
             const currentFile = tp.file.find_tfile(file.path)
             console.log(`moving [${currentFile.path}] to [${newName}]`)
             tp.file.move(newName, currentFile)
@@ -156,9 +167,8 @@ async function rename_format_daily_file_all_folder({ tp, app }, dailyFolder) {
     return resultMsg
 }
 
-const getFolderMarkdown = (tp, app) => {
-    const currentFolder = tp.file.folder(true);
-    const filesInFolder = app.vault.getMarkdownFiles().filter(file => file.path.includes(currentFolder));
+const getFolderMarkdown = (app, folder) => {
+    const filesInFolder = app.vault.getMarkdownFiles().filter(file => file.path.includes(folder));
     return filesInFolder
 }
 
