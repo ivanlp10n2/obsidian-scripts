@@ -1,175 +1,105 @@
 // convert note name into a serialized date and put into a folderr
 // DONE - from:  checklist: 01-Jan-2023 -> {dailyFolder}/2023/01/2023-01-01/2023-01-01
-// INPROGRESS - from: {FROM folder}-{parametrizableFunctionThatCapturesByTitle} -> {parametrizableFolder}/{parametrizableFunctionThatReturnsPath}
+// DONE - from: {FROM folder}-{parametrizableFunctionThatCapturesByTitle} -> {parametrizableFolder}/{parametrizableFunctionThatReturnsPath}
+
+// Utility functions
 const throwError = (message) => {
-    const error = new Error(message)
-    console.error(message, error)
-    throw error
-}
+    console.error(message);
+    throw new Error(message);
+};
 
-const buildNewTp = async (file, tp) => {
-    const printDetails = (tfile) => {
-        console.log(`tfile name: ${tfile.name}`)
-        console.log(`tfile path: ${tfile.path}`)
-    }
-    const tfile = await tp.file.find_tfile(file.path)
-    const result = { ...tp, file: tfile }
-    printDetails(tfile)
-    return result
-}
-const buildDependencies = (templateApi) => {
-    const result = {
-        filename: templateApi.file.name,
-        filepath: templateApi.file.path,
-        rename: async (newName) => await renameFile(newName, templateApi),
-        newDateFormat: (day, month, year) => buildNewPathfile(day, month, year),
-    }
-    return result
-}
-const renameFile = async (newName, tp) => {
-    console.log(`renaming [${tp.file.title}] to [${newName}]`)
-    return await tp.file.move(newName)
-}
+const isANumber = (value) => !isNaN(Number(value));
+
+const ensureTwoDigits = (value) =>
+    value.length === 1 ? `0${value}` : value;
+
+// Date formatting functions
+const monthToNumberStr = (month) => {
+    const mapOfMonths = {
+        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+        'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+        'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12',
+    };
+    return mapOfMonths[month] || throwError(`Invalid month: ${month}`);
+};
+
 const buildNewPathfile = (day, month, year) => {
-    const monthToNumberStr = (month) => {
-        const mapOfMonths = {
-            'Jan': '01',
-            'Feb': '02',
-            'Mar': '03',
-            'Apr': '04',
-            'May': '05',
-            'Jun': '06',
-            'Jul': '07',
-            'Aug': '08',
-            'Sep': '09',
-            'Oct': '10',
-            'Nov': '11',
-            'Dec': '12',
-        }
-        if (!mapOfMonths[month]) {
-            throwError(`we're not moving [${filename}]`)
-        }
-        return mapOfMonths[month]
-    }
-    const ensureTwoDigits = (day) => {
-        return day.length == 1 ? `0${day}` : day
-    }
-    const monthNumber = monthToNumberStr(month)
-    const fullDay = `${year}-${monthNumber}-${ensureTwoDigits(day)}`
-    const fullPath = `${year}/${monthNumber}/${fullDay}/${fullDay}`
-    return fullPath
-}
-const isANumber = (value) => {
-    return !isNaN(value) || !isNaN(Number(value))
-}
+    const monthNumber = monthToNumberStr(month);
+    const fullDay = `${year}-${monthNumber}-${ensureTwoDigits(day)}`;
+    return `${year}/${monthNumber}/${fullDay}/${fullDay}`;
+};
 
-const buildFlowBranches = (dependencies) => {
-    return {
-        createNewFormattedFile: async (day, month, year, rootFolderPath) => {
-            return `${rootFolderPath}${dependencies.newDateFormat(day, month, year)}`
-        },
-        isCorrectToBeFormat: (day, month, year) => {
-            const isDayOneDigit = day.length == 1
-            const isDayTwoDigit = day.length == 2
-            const isDay = isANumber(day) && (isDayOneDigit || isDayTwoDigit)
-            const isMonth = !isANumber(month) && month.length == 3
-            const isYear = isANumber(year) && year.length == 4
-            console.log(`isDay: ${day}-${isDay}, isMonth: ${month}-${isMonth}, isYear: ${year}-${isYear}`)
-            return isDay && isMonth && isYear
-        },
-        isAlreadyFormatted: (day, month, year) => {
-            const isDay = isANumber(day) && day.length == 2
-            const isMonth = isANumber(month) && month.length == 2
-            const isYear = isANumber(year) && year.length == 4
-            return isDay && isMonth && isYear
-        },
-        throwErrorWrongFormat: (filename) => {
-            console.warn(`filename is not correct format [${filename}]`)
-            return `wrong format`
-        },
-        throwErrorAlreadyFormatted: (filename) => {
-            console.warn(`filename is already formatted [${filename}]`)
-            return `already formatted`
-        },
-    }
-}
-const printDependencies = (dependencies) => {
-    console.log(`dependencies loaded:\n${JSON.stringify(dependencies)}`)
-}
+// File operations
+const buildNewTp = async (file, tp) => {
+    const tfile = await tp.file.find_tfile(file.path);
+    console.log(`tfile name: ${tfile.name}`);
+    console.log(`tfile path: ${tfile.path}`);
+    return { ...tp, file: tfile };
+};
 
-async function rename_format_daily_file(tp, outputFolder, moveFn) {
-    if (tp == undefined) throwError("templater dependency is not provided as argument")
-    if (outputFolder == undefined) throwError("outputFolder is not provided as argument")
-    const dependencies = buildDependencies(tp)
-    printDependencies(dependencies)
-    const branchs = buildFlowBranches(dependencies)
-    const run = async () => {
-        const filename = dependencies.filename.split('.md')[0]
+// Validation functions
+const isCorrectToBeFormat = (day, month, year) => {
+    const isDay = isANumber(day) && (day.length === 1 || day.length === 2);
+    const isMonth = !isANumber(month) && month.length === 3;
+    const isYear = isANumber(year) && year.length === 4;
+    console.log(`isDay: ${day}-${isDay}, isMonth: ${month}-${isMonth}, isYear: ${year}-${isYear}`);
+    return isDay && isMonth && isYear;
+};
 
-        const [day, month, year] = filename.split('-')
+const isAlreadyFormatted = (day, month, year) => {
+    const isDay = isANumber(day) && day.length === 2;
+    const isMonth = isANumber(month) && month.length === 2;
+    const isYear = isANumber(year) && year.length === 4;
+    return isDay && isMonth && isYear;
+};
 
-        if (day == undefined || month == undefined || year == undefined)
-            return branchs.throwErrorWrongFormat(filename)
-        if (branchs.isAlreadyFormatted(year, month, day))
-            return branchs.throwErrorAlreadyFormatted(filename)
-        if (branchs.isCorrectToBeFormat(day, month, year)) {
-            const newName = await branchs.createNewFormattedFile(day, month, year, outputFolder)
-            return moveFn(newName)
-        } else
-            return branchs.throwErrorWrongFormat(filename)
+// Main functions
+const rename_format_daily_file = async (
+    tp,
+    outputFolder,
+    moveFn
+) => {
+    const [day, month, year] = tp.file.name.split('.md')[0].split('-');
+
+    if (!day || !month || !year) return "wrong format";
+    if (isAlreadyFormatted(year, month, day)) return "already formatted";
+    if (isCorrectToBeFormat(day, month, year)) {
+        const newName = `${outputFolder}${buildNewPathfile(day, month, year)}`;
+        return moveFn(newName);
     }
-    try {
-        return await run()
-    } catch (e) {
-        console.error("returning error ", e)
-        return (e)
-    }
-}
-async function rename_format_daily_file_all_folder({ tp, app }, {inputFolder, outputFolder} ) {
-    console.log(`inputFolder: ${inputFolder}, outputFolder: ${outputFolder}`)
-    let wrongFormat = []
-    let alreadyFormatted = []
-    let updated = []
-    const files = getFolderMarkdown(app, inputFolder)
-    for (const file of files) {
-        const wrongFormatMsg = () => `- [[${file.name}]]: wrong format`
-        const alreadyFormattedMsg = () => `- [[${file.name}]]: already formatted`
-        const successMsg = () => `- [[${file.name}]]: success`
-        const updatedTp = await buildNewTp(file, tp)
+    return "wrong format";
+};
+
+const rename_format_daily_file_all_folder = async (
+    { tp, app },
+    { inputFolder, outputFolder }
+) => {
+    console.log(`inputFolder: ${inputFolder}, outputFolder: ${outputFolder}`);
+    const findFile = (path) => tp.file.find_tfile(path)
+    const moveFile = (newName, currentFile) => tp.file.move(newName, currentFile)
+
+    const files = app.vault.getMarkdownFiles().filter(file => file.path.includes(inputFolder));
+    const results = await Promise.all(files.map(async (file) => {
+        const updatedTp = await buildNewTp(file, tp);
         const result = await rename_format_daily_file(updatedTp, outputFolder, (newName) => {
-            const currentFile = tp.file.find_tfile(file.path)
-            console.log(`moving [${currentFile.path}] to [${newName}]`)
-            tp.file.move(newName, currentFile)
-            return "success"
-        })
+            const currentFile = findFile(file.path);
+            console.log(`Moving [${currentFile.path}] to [${newName}]`);
+            return moveFile(newName, currentFile);
+        });
+        return `- [[${file.name}]]: ${result}`;
+    }));
 
-        if (result == "success")
-            updated.push(successMsg())
-        else if (result == "wrong format") 
-            wrongFormat.push(wrongFormatMsg())
-        else if (result == "already formatted") 
-            alreadyFormatted.push(alreadyFormattedMsg())
-    }
-    const buildList = (list) => {
-        return list.join("\n")
-    }
+    const categorizedResults = results.reduce((acc, result) => {
+        const category = result.includes("already formatted") ? "already_formatted" :
+            result.includes("wrong format") ? "wrong_format" :
+            "updated";
+        acc[category].push(result);
+        return acc;
+    }, { updated: [], wrong_format: [], already_formatted: [] });
 
-    console.log("updated list: ", buildList(updated))
-    const results = {
-        updated: buildList(updated),
-        wrong_format: buildList(wrongFormat),
-        already_formatted: buildList(alreadyFormatted),
-    }
-    const resultMsg = `\nupdated: {\n${(results.updated)}\n}` +
-            `\nwrong_format: {\n${(results.wrong_format)}\n}` +
-            `\nalready_formatted: {\n${(results.already_formatted)}\n}`
+    return Object.entries(categorizedResults)
+        .map(([category, items]) => `\n${category}: {\n${items.join('\n')}\n}`)
+        .join('');
+};
 
-    return resultMsg
-}
-
-const getFolderMarkdown = (app, folder) => {
-    const filesInFolder = app.vault.getMarkdownFiles().filter(file => file.path.includes(folder));
-    return filesInFolder
-}
-
-module.exports = rename_format_daily_file_all_folder
+module.exports = rename_format_daily_file_all_folder;
