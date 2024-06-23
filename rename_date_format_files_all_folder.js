@@ -1,6 +1,6 @@
 // convert note name into a serialized date and put into a folderr
-// from (01-Jan-2023 -> 2023/01/2023-01-01/2023-01-01)
-
+// DONE - from:  checklist: 01-Jan-2023 -> {dailyFolder}/2023/01/2023-01-01/2023-01-01
+// INPROGRESS - from: {FROM folder}-{parametrizableFunctionThatCapturesByTitle} -> {parametrizableFolder}/{parametrizableFunctionThatReturnsPath}
 const throwError = (message) => {
     const error = new Error(message)
     console.error(message, error)
@@ -18,14 +18,14 @@ const buildDependencies = (templateApi) => {
     const result = {
         filename: templateApi.file.name,
         filepath: templateApi.file.path,
-        rename: async (newName) => renameFile(newName, templateApi),
+        rename: async (newName) => await renameFile(newName, templateApi),
         newDateFormat: (day, month, year) => buildNewPathfile(day, month, year),
     }
     return result
 }
 const renameFile = async (newName, tp) => {
     console.log(`renaming [${tp.file.title}] to [${newName}]`)
-    await tp.file.move(newName)
+    return await tp.file.move(newName)
 }
 const buildNewPathfile = (day, month, year) => {
     const monthToNumberStr = (month) => {
@@ -50,7 +50,7 @@ const buildNewPathfile = (day, month, year) => {
     }
     const monthNumber = monthToNumberStr(month)
     const fullDay = `${year}-${monthNumber}-${day}`
-    const fullPath = `${year}/${monthNumber}/${fullDay}/${fullDay}.md`
+    const fullPath = `${year}/${monthNumber}/${fullDay}/${fullDay}`
     return fullPath
 }
 const isANumber = (value) => {
@@ -60,10 +60,7 @@ const isANumber = (value) => {
 const buildFlowBranches = (dependencies) => {
     return {
         createNewFormattedFile: async (day, month, year, rootFolderPath) => {
-            const newName = `${rootFolderPath}${dependencies.newDateFormat(day, month, year)}`
-            console.log(`renaming [${dependencies.filename}] to [${newName}]`)
-            return new Promise(resolve => resolve("success"))
-            // dependencies.rename(newName)
+            return `${rootFolderPath}${dependencies.newDateFormat(day, month, year)}`
         },
         isCorrectToBeFormat: (day, month, year) => {
             const isDay = isANumber(day) && day.length == 2
@@ -92,7 +89,7 @@ const printDependencies = (dependencies) => {
     console.log(`dependencies loaded:\n${JSON.stringify(dependencies)}`)
 }
 
-async function rename_format_daily_file(tp, dailyFolder) {
+async function rename_format_daily_file(tp, dailyFolder, moveFn) {
     if (tp == undefined) throwError("templater dependency is not provided as argument")
     if (dailyFolder == undefined) throwError("dailyFolder is not provided as argument")
     const dependencies = buildDependencies(tp)
@@ -106,8 +103,8 @@ async function rename_format_daily_file(tp, dailyFolder) {
         if (branchs.isAlreadyFormatted(year, month, day))
             return branchs.throwErrorAlreadyFormatted(filename)
         if (branchs.isCorrectToBeFormat(day, month, year)) {
-            await branchs.createNewFormattedFile(day, month, year, dailyFolder)
-            return "success"
+            const newName = await branchs.createNewFormattedFile(day, month, year, dailyFolder)
+            return moveFn(newName)
         } else
             return branchs.throwErrorWrongFormat(filename)
     }
@@ -128,8 +125,12 @@ async function rename_format_daily_file_all_folder({ tp, app }, dailyFolder) {
         const alreadyFormattedMsg = () => `- [[${file.name}]]: already formatted`
         const successMsg = () => `- [[${file.name}]]: success`
         const updatedTp = await buildNewTp(file, tp)
-        const result = await rename_format_daily_file(updatedTp, dailyFolder)
-        console.log(`result: ${result}`)
+        const result = await rename_format_daily_file(updatedTp, dailyFolder, (newName) => {
+            const currentFile = tp.file.find_tfile(file.path)
+            console.log(`moving [${currentFile.path}] to [${newName}]`)
+            tp.file.move(newName, currentFile)
+            return "success"
+        })
 
         if (result == "success")
             updated.push(successMsg())
