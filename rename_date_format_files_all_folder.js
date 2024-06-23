@@ -6,6 +6,8 @@ const pipe = (...fns) => x => fns.reduce((v, f) => f(v), x);
 
 const throwError = message => { throw new Error(message); };
 
+const stringifyObject = obj => JSON.stringify(obj, null, 2);
+
 const isANumber = value => !isNaN(Number(value));
 
 const ensureTwoDigits = value => value.length === 1 && isANumber(value) ? `0${value}` : value;
@@ -35,7 +37,7 @@ const isCorrectToBeFormat = ({ day, month, year }) => {
         month: !isANumber(month) && month.length === 3,
         year: isANumber(year) && year.length === 4
     }
-    console.log(`Is correctformat: day=${day}:${res.day}, month=${month}:${res.month}, year=${year}:${res.year}`);
+    console.log(`Is correctformat: ${stringifyObject(res)}`);
     return res.day && res.month && res.year;
 }
 
@@ -46,7 +48,7 @@ const isAlreadyFormatted = ({ day, month, year }) => {
         month: isANumber(month) && month.length === 2,
         year: isANumber(day) && day.length === 4
     }
-    console.log(`Is already formatted: day=${day}:${res.day}, month=${month}:${res.month}, year=${year}:${res.year}`);
+    console.log(`Is already formatted: ${stringifyObject(res)}`);
     return res.day && res.month && res.year;
 }
 
