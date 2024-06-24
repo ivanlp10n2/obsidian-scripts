@@ -6,8 +6,6 @@ const pipe = (...fns) => x => fns.reduce((v, f) => f(v), x);
 
 const throwError = message => { throw new Error(message); };
 
-const stringifyObject = obj => JSON.stringify(obj, null, 2);
-
 const isANumber = value => !isNaN(Number(value));
 
 const ensureTwoDigits = value => value.length === 1 && isANumber(value) ? `0${value}` : value;
@@ -26,6 +24,7 @@ const renameAndMoveFile = async ({ tp, outputFolder, moveFn, matchStrategy, tran
     if (!newPathfile) return "transform failed";
     
     const newName = `${outputFolder}${newPathfile}`;
+    console.log(`Moving [${tp.file.path}] to [${newName}]`);
     return moveFn(newName).then(result => result === "success" ? "success" : "skipped");
 };
 
@@ -114,29 +113,26 @@ const processAllFiles = async ({ tp, app }, config) => {
     const findFile = path => tp.file.find_tfile(path);
     const moveFile = (newName, currentFile) => {
         if (!config.override && app.vault.getAbstractFileByPath(`${newName}.md`)) {
-            console.log(`File already exists: ${newName}. Skipping due to override being false.`);
+            console.warn(`File already exists: ${newName}. Skipping due to override being false.`);
             return Promise.resolve("skipped - file exists");
         }
         return tp.file.move(newName, currentFile);
     };
-    const buildNewTp = async ({ file, tp }) => {
+    const updateTp = async ({ file, tp }) => {
         const tfile = await tp.file.find_tfile(file.path);
-        console.log(`tfile name: ${tfile.name}`);
-        console.log(`tfile path: ${tfile.path}`);
         return { ...tp, file: tfile };
     }
 
     const processFile = async file => {
-        console.log("processing file ", file.name);
-        const updatedTp = await buildNewTp({ file, tp });
+        const updatedTp = await updateTp({ file, tp });
+        const moveFn = newName => {
+            const currentFile = findFile(file.path);
+            return moveFile(newName, currentFile);
+        }
         const result = await renameAndMoveFile({
             tp: updatedTp,
             outputFolder: config.outputFolder,
-            moveFn: newName => {
-                const currentFile = findFile(file.path);
-                console.log(`Transforming [${currentFile.path}] to [${newName}]`);
-                return moveFile(newName, currentFile);
-            },
+            moveFn: moveFn,
             matchStrategy: config.matchStrategy,
             transformStrategy: config.transformStrategy
         });
@@ -158,7 +154,6 @@ const processAllFiles = async ({ tp, app }, config) => {
             .join('');
 
     const files = app.vault.getFiles().filter(file => file.path.includes(config.inputFolder));
-    console.log("files", files);
     const results = await Promise.all(files.map(processFile));
 
     return pipe(categorizeResults, formatResults)(results);
@@ -208,7 +203,6 @@ results:
 	{
 	    'inputFolder': '🎁 life/📆 daily/📓 notes/script_test/', 
 	    'outputFolder': '🎁 life/📆 daily/📓 notes/script_test',
-		'override': false,
 		'matchStrategy': 'date-DD-MMM-YYYY',
 		'transformStrategy': 'date-DD-MMM-YYYY',
 	}
